@@ -61,6 +61,15 @@ class FilmActor(models.Model):
         db_table = "film_actor"
         unique_together = (("actor", "film"),)
 
+class FilmCategory(models.Model):
+    film = models.ForeignKey(Film, models.DO_NOTHING, primary_key=True)
+    category = models.ForeignKey(Category, models.DO_NOTHING)
+    last_update = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = "film_category"
+        unique_together = (("film", "category"),)
 
 class Country(models.Model):
     country_id = models.AutoField(primary_key=True)
