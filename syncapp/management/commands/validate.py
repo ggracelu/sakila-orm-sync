@@ -36,18 +36,18 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         days = options["days"]
-        self.stdout.write(f"🔎 Running VALIDATION checks for the last {days} days...")
+        self.stdout.write(f"Running VALIDATION checks for the last {days} days...")
 
         self.check_counts()
         self.check_recent_rentals(days)
         self.check_recent_payments(days)
         self.check_payment_totals(days)
 
-        self.stdout.write(self.style.SUCCESS("🎉 Validation completed."))
+        self.stdout.write(self.style.SUCCESS("Validation completed."))
 
     # dim counts
     def check_counts(self):
-        self.stdout.write("\n📊 Checking dimension table counts...")
+        self.stdout.write("\nChecking dimension table counts...")
 
         checks = [
             ("Films", Film.objects.using("source").count(), DimFilm.objects.count()),
@@ -99,7 +99,7 @@ class Command(BaseCommand):
 
     # revenue totals
     def check_payment_totals(self, days):
-        self.stdout.write("\n💵 Checking payment totals...")
+        self.stdout.write("\nChecking payment totals...")
 
         cutoff = timezone.now() - timedelta(days=days)
 

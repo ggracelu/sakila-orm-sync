@@ -25,23 +25,6 @@ Incremental synchronization using last_update
 Validation over a configurable time window
 
 ---------------------------------------
-Project Structure
-sakila-orm-sync/
-├── manage.py
-├── requirements.txt
-├── syncproj/
-│   ├── settings.py
-├── syncapp/
-│   ├── models_source.py      # ORM models for MySQL Sakila (managed=False)
-│   ├── models.py             # Analytics ORM models (SQLite)
-│   ├── management/
-│       └── commands/
-│           ├── init.py
-│           ├── full_load.py
-│           ├── incremental.py
-│           └── validate.py
-
----------------------------------------
 Installation
 
 Create and activate a virtual environment
