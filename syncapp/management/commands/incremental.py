@@ -60,8 +60,10 @@ class Command(BaseCommand):
 
         last = self.get_last_sync("film") or datetime(1900, 1, 1)
 
+        # Only fetch changed/new films
         updated = Film.objects.using("source").filter(last_update__gt=last)
 
+        count = 0
         for f in updated:
             DimFilm.objects.update_or_create(
                 film_id=f.film_id,
@@ -74,8 +76,10 @@ class Command(BaseCommand):
                     "last_update": f.last_update,
                 },
             )
+            count += 1
 
-        self.stdout.write(f"   → Updated/created {updated.count()} films.")
+        self.stdout.write(f"   → Updated/created {count} films.")
+
 
     def sync_actors(self):
         self.stdout.write("🎭 Incremental sync: actors")
@@ -232,6 +236,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → Upserted {count} payments.")
 
     # sync state
+
     def update_sync_state(self):
         now = timezone.now()
         for table in [

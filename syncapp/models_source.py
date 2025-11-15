@@ -109,7 +109,14 @@ class Address(models.Model):
 
 class Store(models.Model):
     store_id = models.AutoField(primary_key=True)
-    manager_staff_id = models.IntegerField()
+    manager_staff = models.ForeignKey(
+        'Staff',
+        models.DO_NOTHING,
+        db_column='manager_staff_id',
+        null=True,           
+        blank=True,          
+        related_name='managed_stores',
+    )
     address = models.ForeignKey(Address, models.DO_NOTHING)
     last_update = models.DateTimeField()
 

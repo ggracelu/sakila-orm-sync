@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
+from datetime import datetime  
 
 from syncapp.models_source import (
     Film,
@@ -33,7 +34,7 @@ class Command(BaseCommand):
     help = "Full reload of all analytics tables from Sakila (MySQL → SQLite)."
 
     def handle(self, *args, **options):
-        self.stdout.write("🚀 Starting FULL LOAD (complete refresh of analytics DB)...")
+        self.stdout.write("Starting FULL LOAD (complete refresh of analytics DB)...")
 
         with transaction.atomic():
             # clear analytics tables
@@ -54,7 +55,7 @@ class Command(BaseCommand):
             # update sync_state timestamps
             self.update_sync_state()
 
-        self.stdout.write(self.style.SUCCESS("🎉 FULL LOAD completed successfully!"))
+        self.stdout.write(self.style.SUCCESS("FULL LOAD completed successfully!"))
 
     # clear all analytics tables completely
     def clear_target_tables(self):
@@ -75,7 +76,7 @@ class Command(BaseCommand):
 
     # dimensions
     def load_dim_film(self):
-        self.stdout.write("🎬 Loading dim_film...")
+        self.stdout.write("Loading dim_film...")
 
         records = []
         for film in Film.objects.using("source").all():
@@ -95,7 +96,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → dim_film: {len(records)} rows loaded.")
 
     def load_dim_actor(self):
-        self.stdout.write("🎭 Loading dim_actor...")
+        self.stdout.write("Loading dim_actor...")
 
         records = []
         for actor in Actor.objects.using("source").all():
@@ -111,7 +112,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → dim_actor: {len(records)} rows loaded.")
 
     def load_dim_category(self):
-        self.stdout.write("🏷️  Loading dim_category...")
+        self.stdout.write("Loading dim_category...")
 
         records = []
         for cat in Category.objects.using("source").all():
@@ -126,7 +127,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → dim_category: {len(records)} rows loaded.")
 
     def load_dim_store(self):
-        self.stdout.write("🏬 Loading dim_store...")
+        self.stdout.write("Loading dim_store...")
 
         records = []
         stores = Store.objects.using("source").select_related("address__city__country")
@@ -149,7 +150,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → dim_store: {len(records)} rows loaded.")
 
     def load_dim_customer(self):
-        self.stdout.write("👤 Loading dim_customer...")
+        self.stdout.write("Loading dim_customer...")
 
         records = []
         customers = Customer.objects.using("source").select_related("address__city__country")
@@ -174,9 +175,43 @@ class Command(BaseCommand):
         DimCustomer.objects.bulk_create(records)
         self.stdout.write(f"   → dim_customer: {len(records)} rows loaded.")
 
+
+    def ensure_dim_dates_exist(self, date_keys):
+        """
+        Ensure that all date_keys in date_keys exist as DimDate rows.
+        This makes full_load safe even if INIT wasn't run beforehand.
+        """
+        if not date_keys:
+            return
+
+        existing = set(
+            DimDate.objects.filter(date_key__in=date_keys).values_list("date_key", flat=True)
+        )
+        missing = date_keys - existing
+        if not missing:
+            return
+
+        records = []
+        for key in sorted(missing):
+            dt = datetime.strptime(str(key), "%Y%m%d").date()
+            records.append(
+                DimDate(
+                    date_key=key,
+                    date=dt,
+                    year=dt.year,
+                    quarter=((dt.month - 1) // 3) + 1,
+                    month=dt.month,
+                    day_of_month=dt.day,
+                    day_of_week=dt.isoweekday(),
+                    is_weekend=dt.isoweekday() >= 6,
+                )
+            )
+
+        DimDate.objects.bulk_create(records)
+
     # bridge tables
     def load_bridge_film_actor(self):
-        self.stdout.write("🔗 Loading bridge_film_actor...")
+        self.stdout.write("Loading bridge_film_actor...")
 
         records = []
         links = FilmActor.objects.using("source").all()
@@ -199,7 +234,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   → bridge_film_actor: {len(records)} rows loaded.")
 
     def load_bridge_film_category(self):
-        self.stdout.write("🔗 Loading bridge_film_category...")
+        self.stdout.write("Loading bridge_film_category...")
 
         from syncapp.models_source import FilmCategory  # import inside method to avoid circular
 
@@ -222,13 +257,21 @@ class Command(BaseCommand):
 
     # fact tables
     def load_fact_rental(self):
-        self.stdout.write("📀 Loading fact_rental...")
+        self.stdout.write("Loading fact_rental...")
 
-        records = []
         rentals = Rental.objects.using("source").select_related(
             "inventory__film", "customer", "inventory__store"
         )
 
+        date_keys = set()
+        for r in rentals:
+            date_keys.add(int(r.rental_date.strftime("%Y%m%d")))
+            if r.return_date:
+                date_keys.add(int(r.return_date.strftime("%Y%m%d")))
+
+        self.ensure_dim_dates_exist(date_keys)
+
+        records = []
         for r in rentals:
             film_key = DimFilm.objects.get(film_id=r.inventory.film_id).film_key
             store_key = DimStore.objects.get(store_id=r.inventory.store_id).store_key
@@ -240,9 +283,7 @@ class Command(BaseCommand):
             )
 
             rental_duration = (
-                (r.return_date - r.rental_date).days
-                if r.return_date
-                else None
+                (r.return_date - r.rental_date).days if r.return_date else None
             )
 
             records.append(
@@ -262,11 +303,13 @@ class Command(BaseCommand):
         self.stdout.write(f"   → fact_rental: {len(records)} rows loaded.")
 
     def load_fact_payment(self):
-        self.stdout.write("💰 Loading fact_payment...")
+        self.stdout.write("Loading fact_payment...")
+
+        payments = Payment.objects.using("source").all()
+        date_keys = {int(p.payment_date.strftime("%Y%m%d")) for p in payments}
+        self.ensure_dim_dates_exist(date_keys)
 
         records = []
-        payments = Payment.objects.using("source").all()
-
         for p in payments:
             customer_key = DimCustomer.objects.get(customer_id=p.customer_id).customer_key
             store_key = DimStore.objects.get(store_id=p.staff.store_id).store_key
@@ -285,6 +328,7 @@ class Command(BaseCommand):
 
         FactPayment.objects.bulk_create(records)
         self.stdout.write(f"   → fact_payment: {len(records)} rows loaded.")
+
 
     # sync state
     def update_sync_state(self):

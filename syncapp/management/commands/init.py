@@ -10,33 +10,34 @@ class Command(BaseCommand):
     help = "Initialize the analytics database: create dim_date and sync_state."
 
     def handle(self, *args, **options):
-        self.stdout.write("✨ Running INIT process...")
+        self.stdout.write("Running INIT process...")
 
         # run migrations so analytics tables exist
-        self.stdout.write("📦 Ensuring analytics schema is migrated...")
+        self.stdout.write("Ensuring analytics schema is migrated...")
         call_command("migrate", interactive=False)
 
         # populate dim_date if empty
         if DimDate.objects.count() == 0:
-            self.stdout.write("📅 Populating dim_date table...")
+            self.stdout.write("Populating dim_date table...")
             self.populate_dim_date()
         else:
-            self.stdout.write("📅 dim_date already populated.")
+            self.stdout.write("dim_date already populated.")
 
         # init sync_state rows
-        self.stdout.write("🔄 Initializing sync_state records...")
+        self.stdout.write("Initializing sync_state records...")
         self.init_sync_state()
 
         # test MySQL connection
-        self.stdout.write("🧪 Testing MySQL connection...")
+        self.stdout.write("Testing MySQL connection...")
         self.test_source_connection()
 
-        self.stdout.write(self.style.SUCCESS("🎉 INIT completed successfully!"))
+        self.stdout.write(self.style.SUCCESS("INIT completed successfully!"))
 
     # func to populate dim_date
     def populate_dim_date(self):
-        start = date(2000, 1, 1)
-        end = date(2030, 12, 31)
+        start = date(1900, 1, 1)
+        end = date(2100, 12, 31)
+
         delta = timedelta(days=1)
 
         records = []
